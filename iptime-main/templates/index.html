@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hand AI — 손동작 인식</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-1: #0f0c29;
+            --bg-2: #302b63;
+            --bg-3: #24243e;
+            --accent: #a78bfa;
+            --accent-glow: rgba(167, 139, 250, 0.4);
+            --success: #34d399;
+            --card: rgba(255, 255, 255, 0.06);
+            --border: rgba(255, 255, 255, 0.12);
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+        }
+
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, var(--bg-1) 0%, var(--bg-2) 50%, var(--bg-3) 100%);
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 720px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 999px;
+            background: rgba(167, 139, 250, 0.15);
+            border: 1px solid rgba(167, 139, 250, 0.3);
+            color: var(--accent);
+            font-size: 0.75rem;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            margin-bottom: 12px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(90deg, #e2e8f0, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 0.95rem;
+            font-weight: 300;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            backdrop-filter: blur(20px);
+            padding: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .camera-wrap {
+            position: relative;
+            border-radius: 16px;
+            overflow: hidden;
+            background: #000;
+            aspect-ratio: 4 / 3;
+            box-shadow: 0 0 0 1px var(--border), 0 0 40px var(--accent-glow);
+        }
+
+        #video, #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        #overlay { pointer-events: none; }
+
+        .camera-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            color: var(--muted);
+            font-size: 0.9rem;
+        }
+
+        .camera-placeholder svg {
+            width: 48px;
+            height: 48px;
+            opacity: 0.4;
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 16px;
+            padding: 0 4px;
+        }
+
+        .status-dot {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #64748b;
+            transition: background 0.3s;
+        }
+
+        .dot.active {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .result-panel {
+            margin-top: 20px;
+            padding: 20px 24px;
+            border-radius: 14px;
+            background: rgba(167, 139, 250, 0.08);
+            border: 1px solid rgba(167, 139, 250, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.4s ease;
+        }
+
+        .result-panel.detected {
+            background: rgba(52, 211, 153, 0.1);
+            border-color: rgba(52, 211, 153, 0.3);
+        }
+
+        .result-label {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-bottom: 4px;
+        }
+
+        .result-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--text);
+            transition: color 0.3s;
+        }
+
+        .result-panel.detected .result-value {
+            color: var(--success);
+        }
+
+        .result-icon {
+            font-size: 2rem;
+            opacity: 0.8;
+        }
+
+        .hint {
+            margin-top: 16px;
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="badge">AI POWERED</div>
+            <h1>손동작 인식 AI</h1>
+            <p class="subtitle">카메라에 손을 보여주면 실시간으로 동작을 인식합니다</p>
+        </header>
+
+        <div class="card">
+            <div class="camera-wrap">
+                <div class="camera-placeholder" id="placeholder">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                    </svg>
+                    <span>카메라 연결 중...</span>
+                </div>
+                <video id="video" autoplay playsinline muted></video>
+                <canvas id="overlay"></canvas>
+            </div>
+
+            <div class="status-bar">
+                <div class="status-dot">
+                    <div class="dot" id="dot"></div>
+                    <span id="status-text">대기 중</span>
+                </div>
+                <span id="fps" style="font-size:0.75rem;color:var(--muted)"></span>
+            </div>
+
+            <div class="result-panel" id="result-panel">
+                <div>
+                    <div class="result-label">인식된 동작</div>
+                    <div class="result-value" id="result">—</div>
+                </div>
+                <div class="result-icon" id="result-icon">🤚</div>
+            </div>
+
+            <p class="hint">손바닥이 카메라를 향하도록 천천히 움직여 보세요</p>
+        </div>
+    </div>
+
+    <canvas id="capture" style="display:none"></canvas>
+
+    <script>
+        const HAND_CONNECTIONS = [
+            [0,1],[1,2],[2,3],[3,4],
+            [0,5],[5,6],[6,7],[7,8],
+            [0,9],[9,10],[10,11],[11,12],
+            [0,13],[13,14],[14,15],[15,16],
+            [0,17],[17,18],[18,19],[19,20],
+            [5,9],[9,13],[13,17]
+        ];
+
+        const video = document.getElementById('video');
+        const overlay = document.getElementById('overlay');
+        const capture = document.getElementById('capture');
+        const ctx = overlay.getContext('2d');
+        const capCtx = capture.getContext('2d');
+        const placeholder = document.getElementById('placeholder');
+        const dot = document.getElementById('dot');
+        const statusText = document.getElementById('status-text');
+        const resultEl = document.getElementById('result');
+        const resultPanel = document.getElementById('result-panel');
+        const resultIcon = document.getElementById('result-icon');
+
+        let predicting = false;
+        let lastTime = 0;
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+                    audio: false
+                });
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    video.play();
+                    placeholder.style.display = 'none';
+                    overlay.width = video.videoWidth;
+                    overlay.height = video.videoHeight;
+                    capture.width = video.videoWidth;
+                    capture.height = video.videoHeight;
+                    dot.classList.add('active');
+                    statusText.textContent = '실시간 인식 중';
+                    requestAnimationFrame(loop);
+                };
+            } catch (err) {
+                placeholder.querySelector('span').textContent = '카메라 접근이 거부되었습니다';
+                statusText.textContent = '카메라 오류';
+            }
+        }
+
+        function drawLandmarks(landmarks) {
+            const w = overlay.width;
+            const h = overlay.height;
+            ctx.clearRect(0, 0, w, h);
+
+            if (!landmarks) return;
+
+            ctx.strokeStyle = '#a78bfa';
+            ctx.lineWidth = 2;
+            for (const [a, b] of HAND_CONNECTIONS) {
+                ctx.beginPath();
+                ctx.moveTo(landmarks[a][0] * w, landmarks[a][1] * h);
+                ctx.lineTo(landmarks[b][0] * w, landmarks[b][1] * h);
+                ctx.stroke();
+            }
+
+            for (const [x, y] of landmarks) {
+                ctx.beginPath();
+                ctx.arc(x * w, y * h, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#34d399';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        async function predict() {
+            if (predicting || video.readyState < 2) return;
+            predicting = true;
+
+            capCtx.drawImage(video, 0, 0);
+            const imageData = capture.toDataURL('image/jpeg', 0.8);
+
+            try {
+                const res = await fetch('/predict', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ image: imageData })
+                });
+                const data = await res.json();
+
+                const detected = data.prediction && data.prediction !== 'No Hand';
+                resultEl.textContent = detected ? data.prediction : '손을 찾을 수 없음';
+                resultPanel.classList.toggle('detected', detected);
+                resultIcon.textContent = detected ? '✋' : '🤚';
+                drawLandmarks(data.landmarks);
+            } catch (e) {
+                statusText.textContent = '서버 연결 오류';
+            }
+
+            predicting = false;
+        }
+
+        function loop(timestamp) {
+            if (timestamp - lastTime > 300) {
+                lastTime = timestamp;
+                predict();
+            }
+            requestAnimationFrame(loop);
+        }
+
+        startCamera();
+    </script>
+</body>
+</html>

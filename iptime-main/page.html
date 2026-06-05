@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hand AI</title>
+</head>
+<body>
+
+<h1>손동작 인식 AI</h1>
+
+<button onclick="predict()">예측하기</button>
+
+<h2 id="result"></h2>
+
+<script>
+async function predict() {
+    const response = await fetch('/predict');
+    const result = await response.text();
+
+    document.getElementById('result').innerText =
+        "현재 동작: " + result;
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,8 @@
+__pycache__
+*.pyc
+.git
+.vscode
+page.html
+dd.py
+train.py
+data.csv
